@@ -1,21 +1,24 @@
-from gradient_descent_run import *
+import linear_regression.gradient_descent_run as gdr
+import linear_regression.utils as ut
+import numpy as np
+
 
 def linear_regression(X_train, y_train, X_test, y_test):
     # normalize data
-    X_train, sigma, mu = zscore_normalize(X_train)
+    X_train, sigma, mu = ut.zscore_normalize(X_train)
 
     # plot normalized data
 
     m, n = X_train.shape
     y_train = y_train.reshape(m)
     y_test = y_test.reshape(len(y_test))
-    plot_all_features(X_train, y_train)
+    ut.plot_all_features(X_train, y_train)
     # do gradient descent
-    w, b = gradient_descent_run(X_train, y_train)
+    w, b = gdr.gradient_descent_run(X_train, y_train)
     # plot gradient descent against iterations
 
     # converge
-    X_test = zscore_normalize_given_params(X_test, sigma, mu)
+    X_test = ut.zscore_normalize_given_params(X_test, sigma, mu)
     predict = calc_predict(X_test, w, b)
     print(np.mean(abs(y_test - predict)))
 

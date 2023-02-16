@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 
 
 def load_data():
-    dataset = pd.read_csv("data/data.csv")
+    dataset = pd.read_csv("linear_regression/data/data.csv")
     dataset.drop(['id', 'date', "zipcode"], axis=1)
 
     X_labels = ["bedrooms", "bathrooms", "sqft_living", "sqft_lot", "floors", "waterfront", "view", "condition", "grade",
@@ -15,3 +15,5 @@ def load_data():
     y = dataset.loc[:, [y_label]].values
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33)
     return X_train, X_test, y_train, y_test
+
+
