@@ -8,6 +8,7 @@ import cv2
 from keras.utils import to_categorical
 from keras.layers import Dense,Conv2D,Flatten,MaxPool2D,Dropout
 from keras.models import Sequential
+from keras import regularizers
 import tensorflow as tf
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
@@ -20,13 +21,15 @@ def load_data(train_path, labels_map):
 
     train_images = []
     train_labels = []
-    shape = (200, 200)
+    shape = (40, 40)
 
     for filename in os.listdir(train_path):
         name, res = filename.split(".")[0], filename.split(".")[1]
         if res == "jpg":
             img = cv2.imread(os.path.join(train_path, filename))
             name = name.split("_")[0]
+            if name not in labels_map:
+                continue
             train_labels.append(labels_map[name])
             img = cv2.resize(img, shape)
             train_images.append(img)
@@ -34,6 +37,7 @@ def load_data(train_path, labels_map):
     #train_labels = pd.get_dummies(train_labels).values
     train_labels = np.array(train_labels)
     train_images = np.array([x.flatten() for x in train_images])
+    train_images = train_images / 255.0
 
     return train_images, train_labels
 
@@ -54,33 +58,35 @@ def get_models():
     model1 = Sequential([
         Dense(20, activation="relu"),
         Dense(15, activation="relu"),
-        Dense(4, activation="linear")
-    ])
+        Dense(3, activation="linear")
+    ], name="model1")
 
     model2 = Sequential([
         Dense(40, activation="relu"),
         Dense(30, activation="relu"),
         Dense(20, activation="relu"),
-        Dense(4, activation="linear")
-    ])
+        Dense(3, activation="linear")
+    ], name="model2")
 
     model3 = Sequential([
         Dense(70, activation="relu"),
         Dense(60, activation="relu"),
         Dense(45, activation="relu"),
         Dense(20, activation="relu"),
-        Dense(4, activation="linear")
-    ])
+        Dense(3, activation="linear")
+    ], name="model3")
 
-    model_ = Sequential([
-        Dense(5000, activation="relu"),
-        Dense(1000, activation="relu"),
-        Dense(500, activation="relu"),
-        Dense(200, activation="relu"),
-        Dense(50, activation="relu"),
-        Dense(20, activation="relu"),
-        Dense(4, activation="linear")
-    ])
+
+
+    lambdas = [0, 0.00001, 0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1]
+    for lambda_ in lambdas:
+        yield Sequential([
+            Dense(70, activation="relu", kernel_regularizer=regularizers.l2(lambda_)),
+            Dense(60, activation="relu", kernel_regularizer=regularizers.l2(lambda_)),
+            Dense(45, activation="relu", kernel_regularizer=regularizers.l2(lambda_)),
+            Dense(20, activation="relu", kernel_regularizer=regularizers.l2(lambda_)),
+            Dense(3, activation="linear")
+        ], name=f"final_model_reg_{str(lambda_)}")
 
     model4 = Sequential([
         Dense(100, activation="relu"),
@@ -88,51 +94,66 @@ def get_models():
         Dense(50, activation="relu"),
         Dense(20, activation="relu"),
         Dense(15, activation="relu"),
-        Dense(4, activation="linear")
-    ])
+        Dense(3, activation="linear")
+    ], name="model4")
 
-    return [model1, model2, model3, model4]
+
+def run_model(model, x_train, y_train, x_val, y_val):
+    print(f"training model {model.name}")
+    model.compile(
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    )
+    history = model.fit(x_train,y_train,epochs=50,batch_size=50, validation_data=(x_val,y_val), verbose=0)
+    plot_los(history, model.name)
+    loss_last = history.history["loss"][-2:]
+    print(f"model train loss last 2 {loss_last}")
+    vloss_last = history.history["val_loss"][-2:]
+    print(f"model validation loss last 2  {vloss_last}")
+
+    train_accuracy = calc_accuracy(x_train, y_train, model)
+    print(f"model train_accuracy {train_accuracy}")
+
+    val_accuracy = calc_accuracy(x_val, y_val, model)
+    print(f"model val_accuracy {val_accuracy}")
+
+    print(f"done training model {model.name}")
+    print(f"_________________________________")
 
 
 def run():
     labels = {
         "banana": 1, 
         "apple": 0,
-        "mixed": 2,
-        "orange": 3
+        #"mixed": 2,
+        "orange": 2, 
     }
     X, Y = load_data("classification/data/train", labels)
-    x_train, x_trainv, y_train, y_trainv = train_test_split(X, Y, random_state=1)
+    x_train, x_val, y_train, y_val = train_test_split(X, Y, random_state=1)
+ 
     X, Y = load_data("classification/data/test", labels)
-    x_val, x_test, y_val, y_test = train_test_split(X, Y, random_state=1)
+    x_train_more_data, x_test, y_train_more_data, y_test = train_test_split(X, Y, random_state=1)
+    x_train_more_data = np.append(x_train_more_data, x_train, axis=0)
+    y_train_more_data = np.append(y_train_more_data, y_train, axis=0)
+
+    #x_val = np.append(x_val, x_test, axis=0)
+    #y_val = np.append(y_val, y_test, axis=0)
+
     print(x_train.shape, y_train.shape)
 
     for i, model in enumerate(get_models()):
-        print(f"training model {i}")
-        model.compile(
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-        )
-        history = model.fit(x_train,y_train,epochs=50,batch_size=50, validation_data=(x_val,y_val), verbose=0)
-        plot_los(history)
-        loss_last = history.history["loss"][-2:]
-        print(f"model train loss last 2 {loss_last}")
-        vloss_last = history.history["val_loss"][-2:]
-        print(f"model validation loss last 2  {vloss_last}")
-
-        train_accuracy = calc_accuracy(x_train, y_train, model)
-        print(f"model train_accuracy {train_accuracy}")
-
-        val_accuracy = calc_accuracy(x_val, y_val, model)
-        print(f"model val_accuracy {val_accuracy}")
-
-        print(f"done training model {i}")
-        print(f"_________________________________")
+        run_model(model, x_train, y_train, x_val, y_val)
+        #run_model(model, x_train_more_data, y_train_more_data, x_val, y_val)
+        
 
 def calc_accuracy(x, y, model):
     ythat = model.predict(x)
     ythat_p = tf.nn.softmax(ythat)
     ythat_cat = np.argmax(ythat_p, axis=1)
+
+    report = classification_report(y, ythat_cat)
+    print(report)
+
     accuracy = np.sum(y==ythat_cat)
     return accuracy / len(x)
 
@@ -149,11 +170,11 @@ def plot_accuracy1(history):
     plt.legend(['train', 'test'], loc='upper left')
     plt.show()
 
-def plot_los(history):
+def plot_los(history, name):
     # summarize history for loss
     plt.plot(history.history['loss'])
     plt.plot(history.history['val_loss'])
-    plt.title('model loss')
+    plt.title(f'model {name} loss')
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
